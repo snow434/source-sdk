@@ -31,6 +31,8 @@ src/game/server/Release_mod_episodic/
 src/game/server/Release_mod_hl2/
 src/*/Debug/
 src/*/Release/
+src/*/*/Debug/
+src/*/*/Release/
 game/*.dll
 game/*.pdb
 game/*.exe
