@@ -44,6 +44,8 @@ src/materialsystem/*.dll
 src/materialsystem/*.pdb
 src/vgui2/*.dll
 src/vgui2/*.pdb
+/.vs
+*.FileListAbsolute.txt
 
 
 # OSX/Linux build products
