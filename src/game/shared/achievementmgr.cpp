@@ -84,14 +84,8 @@ static void WriteAchievementGlobalState(KeyValues *pKV, bool bPersistToSteamClou
 {
 	char szFilename[_MAX_PATH];
 
-	if (IsX360())
-	{
-		Q_snprintf(szFilename, sizeof(szFilename), "cfg:/%s_GameState.txt", COM_GetModDirectory());
-	}
-	else
-	{
-		Q_snprintf(szFilename, sizeof(szFilename), "GameState.txt");
-	}
+	Q_snprintf(szFilename, sizeof(szFilename), "GameState.txt");
+
 
 	// Never call pKV->SaveToFile!!!!
 	// Save to a buffer instead.
@@ -459,7 +453,7 @@ void CAchievementMgr::LevelInitPreEntity()
 {
 	m_bCheatsEverOn = false;
 
-	// load global state if we haven't already; X360 users may not have had a storage device available or selected at boot time
+	// load global state if we haven't already;
 	EnsureGlobalStateLoaded();
 
 #ifdef GAME_DLL
@@ -892,7 +886,7 @@ void CAchievementMgr::UpdateAchievement(int iAchievementID, int nData)
 //-----------------------------------------------------------------------------
 void CAchievementMgr::PreRestoreSavedGame()
 {
-	// load global state if we haven't already; X360 users may not have had a storage device available or selected at boot time
+	// load global state if we haven't already;
 	EnsureGlobalStateLoaded();
 
 	FOR_EACH_MAP(m_mapAchievement, i)

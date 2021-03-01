@@ -2109,15 +2109,7 @@ void CViewRender::RenderView( const CViewSetup &view, int nClearFlags, int whatT
 			rect.height = view.height;
 
 			pRenderContext = materials->GetRenderContext();
-			if ( IsX360() )
-			{
-				// 360 doesn't create the Fullscreen texture
-				pRenderContext->CopyRenderTargetToTextureEx( GetFullFrameFrameBufferTexture( 1 ), 0, &rect, &rect );
-			}
-			else
-			{
-				pRenderContext->CopyRenderTargetToTextureEx( GetFullscreenTexture(), 0, &rect, &rect );
-			}
+			pRenderContext->CopyRenderTargetToTextureEx( GetFullscreenTexture(), 0, &rect, &rect );
 			pRenderContext.SafeRelease();
 			m_rbTakeFreezeFrame[ view.m_eStereoEye ] = false;
 		}
@@ -3158,16 +3150,6 @@ void CViewRender::DrawMonitors( const CViewSetup &cameraView )
 		++cameraNum;
 	}
 
-	if ( IsX360() && cameraNum > 0 )
-	{
-		// resolve render target to system memory texture
-		// resolving *after* all monitors drawn to ensure a single blit using fastest resolve path
-		CMatRenderContextPtr pRenderContext( materials );
-		pRenderContext->PushRenderTargetAndViewport( pCameraTarget );
-		pRenderContext->CopyRenderTargetToTextureEx( pCameraTarget, 0, NULL, NULL );
-		pRenderContext->PopRenderTargetAndViewport();
-	}
-
 #ifdef _DEBUG
 	g_bRenderingCameraView = false;
 #endif
@@ -3840,7 +3822,6 @@ static inline void DrawOpaqueRenderable( IClientRenderable *pEnt, bool bTwoPass,
 }
 
 //-------------------------------------
-
 
 ConVar r_drawopaquestaticpropslast( "r_drawopaquestaticpropslast", "0", 0, "Whether opaque static props are rendered after non-npcs" );
 
@@ -4769,12 +4750,6 @@ void CSkyboxView::DrawInternal( view_id_t iSkyBoxViewID, bool bInvokePreAndPostR
 	// Store off view origin and angles
 	SetupCurrentView( origin, angles, iSkyBoxViewID );
 
-#if defined( _X360 )
-	CMatRenderContextPtr pRenderContext( materials );
-	pRenderContext->PushVertexShaderGPRAllocation( 32 );
-	pRenderContext.SafeRelease();
-#endif
-
 	// Invoke pre-render methods
 	if ( bInvokePreAndPostRender )
 	{
@@ -4814,11 +4789,6 @@ void CSkyboxView::DrawInternal( view_id_t iSkyBoxViewID, bool bInvokePreAndPostR
 	}
 
 	render->PopView( GetFrustum() );
-
-#if defined( _X360 )
-	pRenderContext.GetFrom( materials );
-	pRenderContext->PopVertexShaderGPRAllocation();
-#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -4967,22 +4937,10 @@ void CShadowDepthView::Draw()
 
 	pRenderContext->ClearColor3ub(0xFF, 0xFF, 0xFF);
 
-#if defined( _X360 )
-	pRenderContext->PushVertexShaderGPRAllocation( 112 ); //almost all work is done in vertex shaders for depth rendering, max out their threads
-#endif
-
 	pRenderContext.SafeRelease();
 
-	if( IsPC() )
-	{
-		render->Push3DView( (*this), VIEW_CLEAR_DEPTH, m_pRenderTarget, GetFrustum(), m_pDepthTexture );
-	}
-	else if( IsX360() )
-	{
-		//for the 360, the dummy render target has a separate depth buffer which we Resolve() from afterward
-		render->Push3DView( (*this), VIEW_CLEAR_DEPTH, m_pRenderTarget, GetFrustum() );
-	}
-
+	render->Push3DView( (*this), VIEW_CLEAR_DEPTH, m_pRenderTarget, GetFrustum(), m_pDepthTexture );
+	
 	SetupCurrentView( origin, angles, VIEW_SHADOW_DEPTH_TEXTURE );
 
 	MDLCACHE_CRITICAL_SECTION();
@@ -5016,22 +4974,9 @@ void CShadowDepthView::Draw()
 	}
 
 	modelrender->ForcedMaterialOverride( 0 );
-
 	m_DrawFlags = 0;
-
 	pRenderContext.GetFrom( materials );
-
-	if( IsX360() )
-	{
-		//Resolve() the depth texture here. Before the pop so the copy will recognize that the resolutions are the same
-		pRenderContext->CopyRenderTargetToTextureEx( m_pDepthTexture, -1, NULL, NULL );
-	}
-
 	render->PopView( GetFrustum() );
-
-#if defined( _X360 )
-	pRenderContext->PopVertexShaderGPRAllocation();
-#endif
 }
 
 
@@ -5043,7 +4988,7 @@ void CFreezeFrameView::Setup( const CViewSetup &shadowViewIn )
 	BaseClass::Setup( shadowViewIn );
 
 	KeyValues *pVMTKeyValues = new KeyValues( "UnlitGeneric" );
-	pVMTKeyValues->SetString( "$basetexture", IsX360() ? "_rt_FullFrameFB1" : "_rt_FullScreen" );
+	pVMTKeyValues->SetString( "$basetexture", "_rt_FullScreen" );
 	pVMTKeyValues->SetInt( "$nocull", 1 );
 	pVMTKeyValues->SetInt( "$nofog", 1 );
 	pVMTKeyValues->SetInt( "$ignorez", 1 );
@@ -5060,10 +5005,6 @@ void CFreezeFrameView::Setup( const CViewSetup &shadowViewIn )
 void CFreezeFrameView::Draw( void )
 {
 	CMatRenderContextPtr pRenderContext( materials );
-
-#if defined( _X360 )
-	pRenderContext->PushVertexShaderGPRAllocation( 16 ); //max out pixel shader threads
-#endif
 
 	// we might only need half of the texture if we're rendering in stereo
 	int nTexX0 = 0, nTexY0 = 0;
@@ -5104,10 +5045,6 @@ void CFreezeFrameView::Draw( void )
 
 		pRenderContext->DrawScreenSpaceRectangle( pMaterial, x, y, width, height, 0, 0, width-1, height-1, width, height );
 	}
-
-#if defined( _X360 )
-	pRenderContext->PopVertexShaderGPRAllocation();
-#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -5247,19 +5184,6 @@ void CBaseWorldView::PopView()
 	pRenderContext->SetHeightClipMode( MATERIAL_HEIGHTCLIPMODE_DISABLE );
 	if( m_DrawFlags & (DF_RENDER_REFRACTION | DF_RENDER_REFLECTION) )
 	{
-		if ( IsX360() )
-		{
-			// these renders paths used their surfaces, so blit their results
-			if ( m_DrawFlags & DF_RENDER_REFRACTION )
-			{
-				pRenderContext->CopyRenderTargetToTextureEx( GetWaterRefractionTexture(), NULL, NULL );
-			}
-			if ( m_DrawFlags & DF_RENDER_REFLECTION )
-			{
-				pRenderContext->CopyRenderTargetToTextureEx( GetWaterReflectionTexture(), NULL, NULL );
-			}
-		}
-
 		render->PopView( GetFrustum() );
 		if (SavedLinearLightMapScale.x>=0)
 		{
@@ -5371,11 +5295,6 @@ void CBaseWorldView::DrawExecute( float waterHeight, view_id_t viewID, float wat
 	PushView( waterHeight );
 
 	CMatRenderContextPtr pRenderContext( materials );
-
-#if defined( _X360 )
-	pRenderContext->PushVertexShaderGPRAllocation( 32 );
-#endif
-
 	ITexture *pSaveFrameBufferCopyTexture = pRenderContext->GetFrameBufferCopyTexture( 0 );
 	if ( engine->GetDXSupportLevel() >= 80 )
 	{
@@ -5429,12 +5348,7 @@ void CBaseWorldView::DrawExecute( float waterHeight, view_id_t viewID, float wat
 	PopView();
 
 	m_DrawFlags = iDrawFlagsBackup;
-
 	g_CurrentViewID = savedViewID;
-
-#if defined( _X360 )
-	pRenderContext->PopVertexShaderGPRAllocation();
-#endif
 }
 
 
@@ -5456,22 +5370,9 @@ void CBaseWorldView::SSAO_DepthPass()
 	CMatRenderContextPtr pRenderContext( materials );
 
 	pRenderContext->ClearColor4ub( 255, 255, 255, 255 );
-
-#if defined( _X360 )
-	Assert(0); // rebalance this if we ever use this on 360
-	pRenderContext->PushVertexShaderGPRAllocation( 112 ); //almost all work is done in vertex shaders for depth rendering, max out their threads
-#endif
-
 	pRenderContext.SafeRelease();
 
-	if( IsPC() )
-	{
-		render->Push3DView( (*this), VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR, pSSAO, GetFrustum() );
-	}
-	else if( IsX360() )
-	{
-		render->Push3DView( (*this), VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR, pSSAO, GetFrustum() );
-	}
+	render->Push3DView( (*this), VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR, pSSAO, GetFrustum() );
 
 	MDLCACHE_CRITICAL_SECTION();
 
@@ -5507,17 +5408,7 @@ void CBaseWorldView::SSAO_DepthPass()
 
 	pRenderContext.GetFrom( materials );
 
-	if( IsX360() )
-	{
-		//Resolve() the depth texture here. Before the pop so the copy will recognize that the resolutions are the same
-		pRenderContext->CopyRenderTargetToTextureEx( NULL, -1, NULL, NULL );
-	}
-
 	render->PopView( GetFrustum() );
-
-#if defined( _X360 )
-	pRenderContext->PopVertexShaderGPRAllocation();
-#endif
 
 	pRenderContext.SafeRelease();
 

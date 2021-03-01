@@ -56,14 +56,6 @@ public:
 
 
 //-----------------------------------------------------------------------------
-// Helper method for console development
-//-----------------------------------------------------------------------------
-#if defined( _X360 ) && !defined( _RETAIL )
-void ConVar_PublishToVXConsole();
-#endif
-
-
-//-----------------------------------------------------------------------------
 // Called when a ConCommand needs to execute
 //-----------------------------------------------------------------------------
 typedef void ( *FnCommandCallbackVoid_t )( void );
@@ -102,7 +94,6 @@ class ConCommandBase
 	friend class ConVar;
 	friend class ConCommand;
 	friend void ConVar_Register( int nCVarFlag, IConCommandBaseAccessor *pAccessor );
-	friend void ConVar_PublishToVXConsole();
 
 	// FIXME: Remove when ConVar changes are done
 	friend class CDefaultCvar;

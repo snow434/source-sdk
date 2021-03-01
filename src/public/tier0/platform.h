@@ -9,23 +9,6 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#if defined( _X360 )
-	#define NO_STEAM
-	#define NO_VOICE
-	// for the 360, the ppc platform and the rtos are tightly coupled
-	// setup the 360 environment here !once! for much less leaf module include wackiness
-	// these are critical order and purposely appear *before* anything else
-	#define _XBOX
-#include <xtl.h>
-	#include <xaudio2.h>
-	#include <xbdm.h>
-#include <Xgraphics.h>
-	#include <xui.h>
-	#include <pmcpbsetup.h>
-#include <XMAHardwareAbstraction.h>
-	#undef _XBOX
-#endif
-
 #include "wchartypes.h"
 #include "basetypes.h"
 #include "tier0/valve_off.h"
@@ -169,13 +152,6 @@ typedef signed char int8;
 		typedef unsigned __int32 uintp;
 	#endif
 
-	#if defined( _X360 )
-		#ifdef __m128
-			#undef __m128
-		#endif
-		#define __m128				__vector4
-	#endif
-
 	// Use this to specify that a function is an override of a virtual function.
 	// This lets the compiler catch cases where you meant to override a virtual
 	// function but you accidentally changed the function signature and created
@@ -275,16 +251,8 @@ typedef unsigned int		uint;
 //      ...
 // }
 //
-// MSDN __declspec(novtable) documentation: http://msdn.microsoft.com/library/default.asp?url=/library/en-us/vclang/html/_langref_novtable.asp
-//
-// Note: NJS: This is not enabled for regular PC, due to not knowing the implications of exporting a class with no no vtable.
-//       It's probable that this shouldn't be an issue, but an experiment should be done to verify this.
-//
-#ifndef _X360
+
 #define abstract_class class
-#else
-#define abstract_class class NO_VTABLE
-#endif
 
 
 // MSVC CRT uses 0x7fff while gcc uses MAX_INT, leading to mismatches between platforms
@@ -382,10 +350,8 @@ typedef void * HINSTANCE;
 #define ALIGN_VALUE( val, alignment ) ( ( val + alignment - 1 ) & ~( alignment - 1 ) ) //  need macro for constant expression
 
 // Used to step into the debugger
-#if defined( _WIN32 ) && !defined( _X360 )
+#if defined( _WIN32 )
 #define DebuggerBreak()  __debugbreak()
-#elif defined( _X360 )
-#define DebuggerBreak() DebugBreak()
 #else
 	// On OSX, SIGTRAP doesn't really stop the thread cold when debugging.
 	// So if being debugged, use INT3 which is precise.
@@ -548,7 +514,7 @@ typedef void * HINSTANCE;
 #endif
 
 // Used for standard calling conventions
-#if defined( _WIN32 ) && !defined( _X360 )
+#if defined( _WIN32 )
 	#define  STDCALL				__stdcall
 	#define  FASTCALL				__fastcall
 	#define  FORCEINLINE			__forceinline
@@ -707,7 +673,6 @@ typedef void *HANDLE;
 //-----------------------------------------------------------------------------
 // fsel
 //-----------------------------------------------------------------------------
-#ifndef _X360
 
 static FORCEINLINE float fsel(float fComparand, float fValGE, float fLT)
 {
@@ -718,21 +683,12 @@ static FORCEINLINE double fsel(double fComparand, double fValGE, double fLT)
 	return fComparand >= 0 ? fValGE : fLT;
 }
 
-#else
-
-// __fsel(double fComparand, double fValGE, double fLT) == fComparand >= 0 ? fValGE : fLT
-// this is much faster than if ( aFloat > 0 ) { x = .. }
-#define fsel __fsel
-
-#endif
-
 
 //-----------------------------------------------------------------------------
 // FP exception handling
 //-----------------------------------------------------------------------------
 //#define CHECK_FLOAT_EXCEPTIONS		1
 
-#if !defined( _X360 )
 #if defined( _MSC_VER )
 
 	#if defined( PLATFORM_WINDOWS_PC64 )
@@ -792,40 +748,6 @@ static FORCEINLINE double fsel(double fComparand, double fValGE, double fLT)
 
 #endif // _MSC_VER
 
-#else
-
-	#ifdef _DEBUG
-		FORCEINLINE bool IsFPUControlWordSet()
-		{
-			float f = 0.996f;
-			union
-			{
-				double flResult;
-				int pResult[2];
-			};
-			flResult = __fctiw( f );
-			return ( pResult[1] == 1 );
-		}
-	#endif
-
-	inline void SetupFPUControlWord()
-	{
-		// Set round-to-nearest in FPSCR
-		// (cannot assemble, must use op-code form)
-		__emit( 0xFF80010C );	// mtfsfi  7,0
-
-		// Favour compatibility over speed (make sure the VPU set to Java-compliant mode)
-		// NOTE: the VPU *always* uses round-to-nearest
-			__vector4  a = { 0.0f, 0.0f, 0.0f, 0.0f };
-			a;				//	Avoid compiler warning
-			__asm
-		{
-			mtvscr a;	// Clear the Vector Status & Control Register to zero
-		}
-	}
-
-#endif // _X360
-
 //-----------------------------------------------------------------------------
 // Purpose: Standard functions for handling endian-ness
 //-----------------------------------------------------------------------------
@@ -884,28 +806,7 @@ inline T QWordSwapC( T dw )
 // Fast swaps
 //-------------------------------------
 
-#if defined( _X360 )
-
-	#define WordSwap  WordSwap360Intr
-	#define DWordSwap DWordSwap360Intr
-
-	template <typename T>
-	inline T WordSwap360Intr( T w )
-	{
-		T output;
-		__storeshortbytereverse( w, 0, &output );
-		return output;
-	}
-
-	template <typename T>
-	inline T DWordSwap360Intr( T dw )
-	{
-		T output;
-		__storewordbytereverse( dw, 0, &output );
-		return output;
-	}
-
-#elif defined( _MSC_VER ) && !defined( PLATFORM_WINDOWS_PC64 )
+#if defined( _MSC_VER ) && !defined( PLATFORM_WINDOWS_PC64 )
 
 	#define WordSwap  WordSwapAsm
 	#define DWordSwap DWordSwapAsm
@@ -953,7 +854,7 @@ inline T QWordSwapC( T dw )
 #define VALVE_LITTLE_ENDIAN 1
 #endif
 
-#if defined( _SGI_SOURCE ) || defined( _X360 )
+#if defined( _SGI_SOURCE  )
 #define	VALVE_BIG_ENDIAN 1
 #endif
 
@@ -1029,17 +930,7 @@ inline void SwapFloat( float *pOut, const float *pIn )		{ SafeSwapFloat( pOut, p
 
 #endif
 
-#if _X360
-FORCEINLINE unsigned long LoadLittleDWord( const unsigned long *base, unsigned int dwordIndex )
-		{
-			return __loadwordbytereverse( dwordIndex<<2, base );
-		}
 
-FORCEINLINE void StoreLittleDWord( unsigned long *base, unsigned int dwordIndex, unsigned long dword )
-		{
-			__storewordbytereverse( dword, dwordIndex<<2, base );
-		}
-#else
 FORCEINLINE unsigned long LoadLittleDWord( const unsigned long *base, unsigned int dwordIndex )
 	{
 		return LittleDWord( base[dwordIndex] );
@@ -1049,7 +940,7 @@ FORCEINLINE void StoreLittleDWord( unsigned long *base, unsigned int dwordIndex,
 	{
 		base[dwordIndex] = LittleDWord(dword);
 	}
-#endif
+
 
 
 //-----------------------------------------------------------------------------
@@ -1232,13 +1123,8 @@ PLATFORM_INTERFACE bool Plat_FastVerifyHardwareKey();
 //-----------------------------------------------------------------------------
 PLATFORM_INTERFACE void* Plat_SimpleLog( const tchar* file, int line );
 
-#if _X360
-#define Plat_FastMemset XMemSet
-#define Plat_FastMemcpy XMemCpy
-#else
 #define Plat_FastMemset memset
 #define Plat_FastMemcpy memcpy
-#endif
 
 //-----------------------------------------------------------------------------
 // Returns true if debugger attached, false otherwise
@@ -1291,11 +1177,6 @@ PLATFORM_INTERFACE bool Is64BitOS();
 #define WM_XMP_PLAYBACKBEHAVIORCHANGED		(WM_USER + 122)
 #define WM_XMP_PLAYBACKCONTROLLERCHANGED	(WM_USER + 123)
 
-inline const char *GetPlatformExt( void )
-{
-	return IsX360() ? ".360" : "";
-}
-
 // flat view, 6 hw threads
 #define XBOX_PROCESSOR_0			( 1<<0 )
 #define XBOX_PROCESSOR_1			( 1<<1 )
@@ -1316,10 +1197,6 @@ inline const char *GetPlatformExt( void )
 // Include additional dependant header components.
 //-----------------------------------------------------------------------------
 #include "tier0/fasttimer.h"
-
-#if defined( _X360 )
-#include "xbox/xbox_core.h"
-#endif
 
 //-----------------------------------------------------------------------------
 // Methods to invoke the constructor, copy constructor, and destructor
